@@ -11,6 +11,13 @@ public class OrderBillingEngine {
 
     private String logFilePath = "order_audit.log";
 
+    // Separate calculation classes
+    private final DiscountCalculator discountCalculator =
+            new DiscountCalculator();
+
+    private final TaxCalculator taxCalculator =
+            new TaxCalculator();
+
     public boolean processOrder(Map<String, Object> orderData) {
 
         // 1. Input Validation
@@ -56,37 +63,14 @@ public class OrderBillingEngine {
             rawTotal += price * quantity;
         }
 
-        double discount = 0.0;
-
         String customerType =
                 (String) orderData.getOrDefault("customerType", "REGULAR");
 
-        if (customerType.equals("VIP")) {
-
-            if (rawTotal > 5000) {
-                discount = rawTotal * 0.15;
-            } else {
-                discount = rawTotal * 0.10;
-            }
-
-        } else if (customerType.equals("STUDENT")) {
-
-            discount = rawTotal * 0.08;
-
-        } else if (customerType.equals("CORPORATE")) {
-
-            if (items.size() >= 10) {
-                discount = rawTotal * 0.20;
-            } else {
-                discount = rawTotal * 0.05;
-            }
-
-        } else {
-
-            if (rawTotal > 10000) {
-                discount = 500.0;
-            }
-        }
+        double discount = discountCalculator.calculateDiscount(
+                customerType,
+                rawTotal,
+                items.size()
+        );
 
         double netAmount = rawTotal - discount;
 
@@ -94,17 +78,11 @@ public class OrderBillingEngine {
         String country =
                 (String) orderData.getOrDefault("country", "PK");
 
-        double taxRate = 0.15;
+        double tax = taxCalculator.calculateTax(
+                netAmount,
+                country
+        );
 
-        if (country.equals("PK")) {
-            taxRate = 0.17;
-        } else if (country.equals("US")) {
-            taxRate = 0.08;
-        } else if (country.equals("UK")) {
-            taxRate = 0.20;
-        }
-
-        double tax = netAmount * taxRate;
         double payableAmount = netAmount + tax;
 
         // 4. Payment Processing
