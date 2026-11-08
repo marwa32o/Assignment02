@@ -12,14 +12,14 @@ public class OrderBillingEngine {
 
     private String logFilePath = "order_audit.log";
 
-    // Separate calculation classes
+    // Discount and Tax Calculators
     private final DiscountCalculator discountCalculator =
             new DiscountCalculator();
 
     private final TaxCalculator taxCalculator =
             new TaxCalculator();
 
-    // Separate validation class
+    // Order Validation
     private final OrderValidator orderValidator =
             new OrderValidator();
 
@@ -27,9 +27,12 @@ public class OrderBillingEngine {
     private final OrderRepository orderRepository =
             new FileOrderRepository();
 
-    // Notification Service
-    private final NotificationService notificationService =
-            new NotificationService();
+    // Notification Strategies
+    private final Map<String, NotificationService> notificationServices =
+            Map.of(
+                    "EMAIL", new EmailNotification(),
+                    "SMS", new SMSNotification()
+            );
 
     public boolean processOrder(Map<String, Object> orderData) {
 
@@ -53,7 +56,8 @@ public class OrderBillingEngine {
         }
 
         String customerType =
-                (String) orderData.getOrDefault("customerType", "REGULAR");
+                (String) orderData.getOrDefault(
+                        "customerType", "REGULAR");
 
         double discount = discountCalculator.calculateDiscount(
                 customerType, rawTotal, items.size());
@@ -70,7 +74,8 @@ public class OrderBillingEngine {
 
         // 4. Payment Processing - Strategy Pattern
         String paymentMethod =
-                (String) orderData.getOrDefault("paymentMethod", "CASH");
+                (String) orderData.getOrDefault(
+                        "paymentMethod", "CASH");
 
         PaymentStrategy paymentStrategy;
 
@@ -89,12 +94,14 @@ public class OrderBillingEngine {
 
             default:
                 System.out.println(
-                        "Error: Unsupported payment method: " + paymentMethod);
+                        "Error: Unsupported payment method: "
+                        + paymentMethod);
                 return false;
         }
 
         String paymentStatus =
-                paymentStrategy.processPayment(orderData, payableAmount);
+                paymentStrategy.processPayment(
+                        orderData, payableAmount);
 
         if (paymentStatus == null) {
             return false;
@@ -113,20 +120,25 @@ public class OrderBillingEngine {
                     "Failed to write order log: " + e.getMessage());
         }
 
-        // 6. Send Notification using NotificationService
+        // 6. Send Notification using NotificationService interface
         String notifyChannel =
-                (String) orderData.getOrDefault("notifyChannel", "EMAIL");
+                (String) orderData.getOrDefault(
+                        "notifyChannel", "EMAIL");
 
         String phone =
                 (String) orderData.getOrDefault(
                         "phone", "0300-0000000");
 
-        notificationService.sendNotification(
-                notifyChannel,
-                email,
-                phone,
-                payableAmount
-        );
+        NotificationService notificationService =
+                notificationServices.get(notifyChannel);
+
+        if (notificationService != null) {
+            notificationService.sendNotification(
+                    email,
+                    phone,
+                    payableAmount
+            );
+        }
 
         return true;
     }
