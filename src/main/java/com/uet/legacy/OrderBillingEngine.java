@@ -1,9 +1,10 @@
 
 package com.uet.legacy;
 
-import java.io.FileWriter;
+import com.uet.repository.OrderRepository;
+import com.uet.repository.FileOrderRepository;
+
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -18,48 +19,32 @@ public class OrderBillingEngine {
     private final TaxCalculator taxCalculator =
             new TaxCalculator();
 
+    // Separate validation class
+    private final OrderValidator orderValidator =
+            new OrderValidator();
+
+    // Repository Pattern
+    private final OrderRepository orderRepository =
+            new FileOrderRepository();
+
     public boolean processOrder(Map<String, Object> orderData) {
 
         // 1. Input Validation
-        if (orderData == null || orderData.isEmpty()) {
-            System.out.println("Error: Order data is empty!");
+        if (!orderValidator.validateOrder(orderData)) {
             return false;
         }
 
         String email = (String) orderData.get("customerEmail");
 
-        if (email == null || !email.contains("@")) {
-            System.out.println("Error: Invalid customer email!");
-            return false;
-        }
-
         List<Map<String, Object>> items =
                 (List<Map<String, Object>>) orderData.get("items");
-
-        if (items == null || items.isEmpty()) {
-            System.out.println("Error: Cart has no items!");
-            return false;
-        }
 
         // 2. Total and Discount Calculation
         double rawTotal = 0.0;
 
         for (Map<String, Object> item : items) {
-
-            if (!item.containsKey("price")
-                    || !item.containsKey("quantity")) {
-                System.out.println("Error: Missing item price or quantity!");
-                return false;
-            }
-
             double price = (double) item.get("price");
             int quantity = (int) item.get("quantity");
-
-            if (price <= 0 || quantity <= 0) {
-                System.out.println("Error: Invalid price or quantity!");
-                return false;
-            }
-
             rawTotal += price * quantity;
         }
 
@@ -67,10 +52,7 @@ public class OrderBillingEngine {
                 (String) orderData.getOrDefault("customerType", "REGULAR");
 
         double discount = discountCalculator.calculateDiscount(
-                customerType,
-                rawTotal,
-                items.size()
-        );
+                customerType, rawTotal, items.size());
 
         double netAmount = rawTotal - discount;
 
@@ -78,10 +60,7 @@ public class OrderBillingEngine {
         String country =
                 (String) orderData.getOrDefault("country", "PK");
 
-        double tax = taxCalculator.calculateTax(
-                netAmount,
-                country
-        );
+        double tax = taxCalculator.calculateTax(netAmount, country);
 
         double payableAmount = netAmount + tax;
 
@@ -92,7 +71,6 @@ public class OrderBillingEngine {
         PaymentStrategy paymentStrategy;
 
         switch (paymentMethod) {
-
             case "CREDIT_CARD":
                 paymentStrategy = new CreditCardPayment();
                 break;
@@ -118,19 +96,15 @@ public class OrderBillingEngine {
             return false;
         }
 
-        // 5. Direct File Saving
-        try (FileWriter writer =
-                     new FileWriter(logFilePath, true)) {
-
-            writer.write(
-                    LocalDateTime.now()
-                    + " | Order for: " + email
-                    + " | Payable: PKR " + payableAmount
-                    + " | Status: " + paymentStatus
-                    + "\n");
-
+        // 5. Save Order using Repository Pattern
+        try {
+            orderRepository.saveOrder(
+                    logFilePath,
+                    email,
+                    payableAmount,
+                    paymentStatus
+            );
         } catch (IOException e) {
-
             System.out.println(
                     "Failed to write order log: " + e.getMessage());
         }
@@ -140,7 +114,6 @@ public class OrderBillingEngine {
                 (String) orderData.getOrDefault("notifyChannel", "EMAIL");
 
         if (notifyChannel.equals("EMAIL")) {
-
             System.out.println(
                     "[EMAIL DISPATCHED] To: " + email
                     + " | Your order of PKR "
@@ -148,7 +121,6 @@ public class OrderBillingEngine {
                     + " is confirmed!");
 
         } else if (notifyChannel.equals("SMS")) {
-
             String phone =
                     (String) orderData.getOrDefault(
                             "phone", "0300-0000000");
