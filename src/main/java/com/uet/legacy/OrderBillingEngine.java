@@ -27,6 +27,10 @@ public class OrderBillingEngine {
     private final OrderRepository orderRepository =
             new FileOrderRepository();
 
+    // Notification Service
+    private final NotificationService notificationService =
+            new NotificationService();
+
     public boolean processOrder(Map<String, Object> orderData) {
 
         // 1. Input Validation
@@ -109,27 +113,20 @@ public class OrderBillingEngine {
                     "Failed to write order log: " + e.getMessage());
         }
 
-        // 6. Notification
+        // 6. Send Notification using NotificationService
         String notifyChannel =
                 (String) orderData.getOrDefault("notifyChannel", "EMAIL");
 
-        if (notifyChannel.equals("EMAIL")) {
-            System.out.println(
-                    "[EMAIL DISPATCHED] To: " + email
-                    + " | Your order of PKR "
-                    + String.format("%.2f", payableAmount)
-                    + " is confirmed!");
+        String phone =
+                (String) orderData.getOrDefault(
+                        "phone", "0300-0000000");
 
-        } else if (notifyChannel.equals("SMS")) {
-            String phone =
-                    (String) orderData.getOrDefault(
-                            "phone", "0300-0000000");
-
-            System.out.println(
-                    "[SMS DISPATCHED] To: " + phone
-                    + " | Order confirmed! Paid: PKR "
-                    + String.format("%.2f", payableAmount));
-        }
+        notificationService.sendNotification(
+                notifyChannel,
+                email,
+                phone,
+                payableAmount
+        );
 
         return true;
     }
